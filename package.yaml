@@ -1,0 +1,40 @@
+name:                vinyl-json
+version:             0.1.0.0
+github:              "heptahedron/vinyl-json"
+license:             MIT
+author:              "Braxton Spence"
+maintainer:          "~@braxton.codes"
+copyright:           "2018 Braxton Spence"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+synopsis:            JSON record types to be used with Vinyl.
+category:            Data
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/heptahedron/vinyl-json#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- vinyl
+- aeson
+- bytestring
+- text
+
+library:
+  source-dirs: src
+
+tests:
+  vinyl-json-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - vinyl-json
