@@ -35,11 +35,11 @@ import           Data.Vinyl.Json.Internal
 
 infixr 0 ::?
 
-type (::?) s t = JsonField '(s, Optional, t)
+type (::?) s t = '(s, Optional, t)
 
 infixr 0 ::!
 
-type (::!) s t = JsonField '(s, Required, t)
+type (::!) s t = '(s, Required, t)
 
 data Optionality = Required | Optional
 
@@ -49,6 +49,9 @@ data SOptionality opt where
 
 class SingI opt where
   sing :: SOptionality opt
+
+instance SingI Required where sing = SRequired
+instance SingI Optional where sing = SOptional
 
 data JsonField :: (TL.Symbol, Optionality, *) -> * where
   ReqField :: (TL.KnownSymbol s) => !a         -> JsonField '(s, Required, a)
