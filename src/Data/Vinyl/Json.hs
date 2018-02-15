@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
@@ -103,3 +105,41 @@ instance (FromJsonObj (JsonRec rs)) => A.FromJSON (JsonRec rs) where
   
 instance (A.ToJSON (JsonRec rs)) => Show (JsonRec rs) where
   show = B.unpack . A.encode  
+
+type family JsonFieldName r where
+  JsonFieldName '(s, opt, t) = s
+
+type family ElFieldName r where
+  ElFieldName '(s, t) = s
+
+type family ToElField r where
+  ToElField '(s, Required, t) = '(s, t)
+  ToElField '(s, Optional, t) = '(s, Maybe t)
+
+type family ToFieldRec rs where
+  ToFieldRec (r ':rs) = (ToElField r)':ToFieldRec rs
+  ToFieldRec '[]      = '[]
+
+type family ToJsonField r where
+  -- As far as I can tell, there's not a great way to make this mirror
+  -- ToElField.
+  ToJsonField '(s, t) = '(s, Required, t)
+
+type family ToJsonRec r where
+  ToJsonRec (r ':rs) = (ToJsonField r)':ToJsonRec rs
+  ToJsonRec '[]      = '[]
+
+toElField :: forall r. JsonField r -> V.ElField (ToElField r)
+toElField (ReqField a) = V.Field @(JsonFieldName r) a
+toElField (OptField a) = V.Field @(JsonFieldName r) a
+
+toFieldRec :: forall rs. JsonRec rs -> V.FieldRec (ToFieldRec rs)
+toFieldRec (MkJsonRec (x :& xs)) = toElField x :& toFieldRec (MkJsonRec xs)
+toFieldRec (MkJsonRec V.RNil)    = V.RNil
+
+toJsonField :: forall r. V.ElField r -> JsonField (ToJsonField r)
+toJsonField (V.Field a) = ReqField @(ElFieldName r) a
+
+toJsonRec :: forall rs. V.FieldRec rs -> JsonRec (ToJsonRec rs)
+toJsonRec (x :& xs) = MkJsonRec $ (toJsonField x) :& (unJsonRec $ toJsonRec xs)
+toJsonRec V.RNil    = MkJsonRec $ V.RNil

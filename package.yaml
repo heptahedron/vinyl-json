@@ -25,6 +25,10 @@ dependencies:
 - bytestring
 - text
 
+default-extensions: # For convenience at the REPL
+  - TypeApplications
+  - DataKinds
+
 library:
   source-dirs: src
 
