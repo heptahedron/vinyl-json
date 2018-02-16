@@ -1,3 +1,5 @@
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {- |
 Module      : Data.Vinyl.Json.Class
 Copyright   : (c) Braxton Spence, 2018
@@ -11,6 +13,7 @@ module Data.Vinyl.Json.Class where
 
 import qualified Data.Aeson.Types as A
 import qualified Data.Text as T
+import           Data.Vinyl
 
 -- | For use in the serialization of 'Data.Vinyl.Json.Simple.JsonRec''.
 class FieldToJson a where
@@ -31,3 +34,6 @@ class FieldToMaybeJson r where
 class FromJsonObj a where
   parseJsonObj :: A.Object -> A.Parser a
 
+class IsFieldRec a rs | a -> rs where
+  fromFieldRec :: FieldRec rs -> a
+  toFieldRec   :: a             -> FieldRec rs

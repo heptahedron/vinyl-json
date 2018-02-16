@@ -87,7 +87,6 @@ import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding.Internal as A
 import qualified Data.Aeson.TH as A
 import qualified Data.Aeson.Types as A
-import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Text as T
 import           Data.Vinyl (Rec((:&)))
 import qualified Data.Vinyl as V
@@ -191,13 +190,19 @@ instance ( FromJsonObj (JsonRec rs), A.FromJSON a
 
 instance (FromJsonObj (JsonRec rs)) => A.FromJSON (JsonRec rs) where
   parseJSON = A.withObject "JsonRec" $ parseJsonObj
-  
-instance (A.ToJSON (JsonRec rs)) => Show (JsonRec rs) where
-  show = B.unpack . A.encode  
 
-class IsFieldRec a (rs :: [(TL.Symbol, *)]) | a -> rs where
-  fromFieldRec :: V.FieldRec rs -> a
-  toFieldRec   :: a             -> V.FieldRec rs
+instance (Show a) => Show (JsonField '(s, opt, a)) where
+  show = \case
+    ReqField a  -> fName <> " !-> " <> show a
+    OptField ma -> fName <> " ?-> " <> case ma of
+      Just a  -> show a
+      Nothing -> "[missing]"
+    where
+      fName :: (TL.KnownSymbol s) => String
+      fName = TL.symbolVal (P.Proxy @s)
+  
+instance (V.RecAll JsonField rs Show) => Show (JsonRec rs) where
+  show = show . unJsonRec
 
 instance IsFieldRec (JsonRec '[]) '[] where
   fromFieldRec = const $ MkJsonRec V.RNil
