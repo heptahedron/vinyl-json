@@ -56,12 +56,20 @@ The following example should illustrate the behavior of 'ReqField's,
 > printTestRecEnc :: IO ()
 > printTestRecEnc = B.putStrLn $ A.encode testRec
 
-Here, @printTestRecEnc@ should print
-@{"req_int":3,"req_just_int":3,"req_nothing_int":null,"opt_present_bool":true,"opt_present_just_bool":true,"opt_present_nothing_bool":null}@. Notice
-how all the fields with @missing@ in their name, whose values were
-@Nothing@, are in fact missing from the output, and how the fields
-with @present@ in their name, whose values were @Just something@, are
-present in the output.
+Here, @printTestRecEnc@ should print something like
+
+> { "req_int":3
+> , "req_just_int":3
+> , "req_nothing_int":null
+> , "opt_present_bool":true
+> , "opt_present_just_bool":true
+> , "opt_present_nothing_bool":null
+> }
+
+Notice how all the fields with @missing@ in their name, whose values
+were @Nothing@, are in fact missing from the output, and how the
+fields with @present@ in their name, whose values were @Just
+something@, are present in the output.
 
 -}
 module Data.Vinyl.Json
