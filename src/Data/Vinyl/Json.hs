@@ -1,3 +1,5 @@
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -77,11 +79,6 @@ module Data.Vinyl.Json
   , Optionality
   , JsonField
   , JsonRec
-  , JsonFieldName, ElFieldName
-  , ToElField, ToFieldRec
-  , ToJsonField, ToJsonRec
-  , toElField, toFieldRec
-  , toJsonField, toJsonRec
   )
 where
 
@@ -127,11 +124,11 @@ data SOptionality opt where
 
 -- | One-off singleton class to get 'SOptionality' values, not
 -- intended for external user.
-class SingI opt where
+class SingOpt opt where
   sing :: SOptionality opt
 
-instance SingI Required where sing = SRequired
-instance SingI Optional where sing = SOptional
+instance SingOpt Required where sing = SRequired
+instance SingOpt Optional where sing = SOptional
 
 -- | Corresponds to a key-value pair in JSON-encoded data. @JsonField
 -- '(s, opt, a)@ is the field with key @s@, having 'Optionality'
@@ -160,7 +157,8 @@ instance (V.RecAll JsonField rs FieldToMaybeJson) => A.ToJSON (JsonRec rs) where
   toJSON = A.object
          . concat
          . V.recordToList
-         . V.rmap (withDict (V.Const . maybeToList . toMaybePair) . V.getCompose)
+         . V.rmap (  withDict (V.Const . maybeToList . toMaybePair)
+                   . V.getCompose)
          . V.reifyConstraint (P.Proxy @FieldToMaybeJson)
          . unJsonRec
 
@@ -168,14 +166,16 @@ instance (V.RecAll JsonField rs FieldToMaybeJson) => A.ToJSON (JsonRec rs) where
              . foldr (<>) mempty
              . concat
              . V.recordToList
-             . V.rmap (withDict (V.Const . maybeToList . toMaybeEncoding) . V.getCompose)
+             . V.rmap (  withDict (V.Const . maybeToList . toMaybeEncoding)
+                       . V.getCompose)
              . V.reifyConstraint (P.Proxy @FieldToMaybeJson)
              . unJsonRec
 
 instance FromJsonObj (JsonRec '[]) where
   parseJsonObj = const $ return $ MkJsonRec V.RNil
 
-instance (FromJsonObj (JsonRec rs), A.FromJSON a, TL.KnownSymbol s, SingI opt)
+instance ( FromJsonObj (JsonRec rs), A.FromJSON a
+         , TL.KnownSymbol s, SingOpt opt)
   => FromJsonObj (JsonRec ('(s, opt, a)':rs)) where
   parseJsonObj o = case sing @opt of
     SRequired -> do
@@ -195,40 +195,26 @@ instance (FromJsonObj (JsonRec rs)) => A.FromJSON (JsonRec rs) where
 instance (A.ToJSON (JsonRec rs)) => Show (JsonRec rs) where
   show = B.unpack . A.encode  
 
-type family JsonFieldName r where
-  JsonFieldName '(s, opt, t) = s
+class IsFieldRec a (rs :: [(TL.Symbol, *)]) | a -> rs where
+  fromFieldRec :: V.FieldRec rs -> a
+  toFieldRec   :: a             -> V.FieldRec rs
 
-type family ElFieldName r where
-  ElFieldName '(s, t) = s
+instance IsFieldRec (JsonRec '[]) '[] where
+  fromFieldRec = const $ MkJsonRec V.RNil
+  toFieldRec = const V.RNil . unJsonRec
 
-type family ToElField r where
-  ToElField '(s, Required, t) = '(s, t)
-  ToElField '(s, Optional, t) = '(s, Maybe t)
+instance (IsFieldRec (JsonRec jrs) rs)
+         => IsFieldRec (JsonRec ('(s, Optional, t)':jrs))
+                       ('(s, Maybe t)':rs) where
+  fromFieldRec ((V.Field ma) :& xs)
+    = MkJsonRec $ OptField @s ma :& (unJsonRec $ fromFieldRec xs)
+  toFieldRec (MkJsonRec ((OptField ma) :& xs))
+    = V.Field @s ma :& toFieldRec (MkJsonRec xs)
 
-type family ToFieldRec rs where
-  ToFieldRec (r ':rs) = (ToElField r)':ToFieldRec rs
-  ToFieldRec '[]      = '[]
-
-type family ToJsonField r where
-  -- As far as I can tell, there's not a great way to make this mirror
-  -- ToElField.
-  ToJsonField '(s, t) = '(s, Required, t)
-
-type family ToJsonRec r where
-  ToJsonRec (r ':rs) = (ToJsonField r)':ToJsonRec rs
-  ToJsonRec '[]      = '[]
-
-toElField :: forall r. JsonField r -> V.ElField (ToElField r)
-toElField (ReqField a) = V.Field @(JsonFieldName r) a
-toElField (OptField a) = V.Field @(JsonFieldName r) a
-
-toFieldRec :: forall rs. JsonRec rs -> V.FieldRec (ToFieldRec rs)
-toFieldRec (MkJsonRec (x :& xs)) = toElField x :& toFieldRec (MkJsonRec xs)
-toFieldRec (MkJsonRec V.RNil)    = V.RNil
-
-toJsonField :: forall r. V.ElField r -> JsonField (ToJsonField r)
-toJsonField (V.Field a) = ReqField @(ElFieldName r) a
-
-toJsonRec :: forall rs. V.FieldRec rs -> JsonRec (ToJsonRec rs)
-toJsonRec (x :& xs) = MkJsonRec $ (toJsonField x) :& (unJsonRec $ toJsonRec xs)
-toJsonRec V.RNil    = MkJsonRec $ V.RNil
+instance (IsFieldRec (JsonRec jrs) rs)
+         => IsFieldRec (JsonRec ('(s, Required, t)':jrs))
+                       ('(s, t)':rs) where
+  fromFieldRec ((V.Field a) :& xs)
+    = MkJsonRec $ ReqField @s a :& (unJsonRec $ fromFieldRec xs)
+  toFieldRec (MkJsonRec ((ReqField a) :& xs))
+    = V.Field @s a :& toFieldRec (MkJsonRec xs)
