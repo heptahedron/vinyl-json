@@ -13,7 +13,69 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Data.Vinyl.Json where
+{- |
+Module      : Data.Vinyl.Json
+Description : 'JsonRec' record type, for JSON serialization,
+              where keys may be omitted.
+Copyright   : (c) Braxton Spence, 2018
+License     : MIT
+Maintainer  : ~@braxton.codes
+Stability   : experimental
+
+The following example should illustrate the behavior of 'ReqField's,
+'OptField's, and their respective behavior during serialization.
+
+> import Data.Vinyl
+> import Data.Vinyl.Json
+> import Data.ByteString.Lazy as B
+>
+> type TestFields = [ "req_int"                  ::! Int
+>                   , "req_just_int"             ::! Maybe Int
+>                   , "req_nothing_int"          ::! Maybe Int
+>                   , "opt_present_bool"         ::? Bool
+>                   , "opt_missing_bool"         ::? Bool
+>                   , "opt_present_just_bool"    ::? Maybe Bool
+>                   , "opt_present_nothing_bool" ::? Maybe Bool
+>                   , "opt_missing_just_bool"    ::? Maybe Bool
+>                   , "opt_missing_nothing_bool" ::? Maybe Bool
+>                   ]
+> 
+> testRec :: JsonRec TestFields
+> testRec = MkJsonRec
+>         $  ReqField 3
+>         :& ReqField (Just 3)
+>         :& ReqField Nothing
+>         :& OptField (Just True)
+>         :& OptField Nothing
+>         :& OptField (Just (Just True))
+>         :& OptField (Just Nothing)
+>         :& OptField Nothing
+>         :& OptField Nothing
+>         :& V.RNil
+> 
+> printTestRecEnc :: IO ()
+> printTestRecEnc = B.putStrLn $ A.encode testRec
+
+Here, @printTestRecEnc@ should print
+@{"req_int":3,"req_just_int":3,"req_nothing_int":null,"opt_present_bool":true,"opt_present_just_bool":true,"opt_present_nothing_bool":null}@. Notice
+how all the fields with @missing@ in their name, whose values were
+@Nothing@, are in fact missing from the output, and how the fields
+with @present@ in their name, whose values were @Just something@, are
+present in the output.
+
+-}
+module Data.Vinyl.Json
+  ( (::?), (::!)
+  , Optionality
+  , JsonField
+  , JsonRec
+  , JsonFieldName, ElFieldName
+  , ToElField, ToFieldRec
+  , ToJsonField, ToJsonRec
+  , toElField, toFieldRec
+  , toJsonField, toJsonRec
+  )
+where
 
 import           Data.Aeson ((.=), (.:), (.:!))
 import qualified Data.Aeson as A
@@ -37,28 +99,47 @@ import           Data.Vinyl.Json.Internal
 
 infixr 0 ::?
 
+-- | Convenient infix operator for JSON fields that are optional,
+-- i.e. might not be present in a given object.
 type (::?) s t = '(s, Optional, t)
 
 infixr 0 ::!
 
+-- | Convenient infix operator for JSON fields that are required.
 type (::!) s t = '(s, Required, t)
 
+-- | Whether a field is required or optional.
 data Optionality = Required | Optional
 
+-- | Singleton for the 'Optionality' type, not intended for external
+-- use.
 data SOptionality opt where
   SRequired :: SOptionality Required
   SOptional :: SOptionality Optional
 
+-- | One-off singleton class to get 'SOptionality' values, not
+-- intended for external user.
 class SingI opt where
   sing :: SOptionality opt
 
 instance SingI Required where sing = SRequired
 instance SingI Optional where sing = SOptional
 
+-- | Corresponds to a key-value pair in JSON-encoded data. @JsonField
+-- '(s, opt, a)@ is the field with key @s@, having 'Optionality'
+-- @opt@, and a value of type @a@. If a field is allowed to be @null@,
+-- but the key itself must still be present in the JSON, then it would
+-- be of type @JsonField '("field_name", Required, Maybe a)@. If the
+-- field need not be included in the JSON, it has 'Optionality'
+-- 'Optional'.
 data JsonField :: (TL.Symbol, Optionality, *) -> * where
+  -- | Constructor for fields whose key must be present in the encoded JSON.
   ReqField :: (TL.KnownSymbol s) => !a         -> JsonField '(s, Required, a)
+  -- | Constructor for fields whose key may be missing from the encoded JSON.
   OptField :: (TL.KnownSymbol s) => !(Maybe a) -> JsonField '(s, Optional, a)
 
+-- | Newtype for Vinyl records with 'JsonField' types, to avoid
+-- attaching any instances directly to 'V.Rec'.
 newtype JsonRec rs = MkJsonRec { unJsonRec :: V.Rec JsonField rs }
   
 instance (A.ToJSON a) => FieldToMaybeJson (JsonField '(s, opt, a)) where
