@@ -34,7 +34,7 @@ testRec = MkJsonRec
         :& OptField (Just Nothing)
         :& OptField Nothing
         :& OptField Nothing
-        :& V.RNil
+        :& RNil
 
 printTestRecEnc :: IO ()
 printTestRecEnc = B.putStrLn $ A.encode testRec

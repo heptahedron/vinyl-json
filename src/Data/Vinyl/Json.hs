@@ -51,7 +51,7 @@ The following example should illustrate the behavior of 'ReqField's,
 >         :& OptField (Just Nothing)
 >         :& OptField Nothing
 >         :& OptField Nothing
->         :& V.RNil
+>         :& RNil
 > 
 > printTestRecEnc :: IO ()
 > printTestRecEnc = B.putStrLn $ A.encode testRec
