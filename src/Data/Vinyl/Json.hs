@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -142,10 +143,97 @@ data JsonField :: (TL.Symbol, Optionality, *) -> * where
   -- | Constructor for fields whose key may be missing from the encoded JSON.
   OptField :: (TL.KnownSymbol s) => !(Maybe a) -> JsonField '(s, Optional, a)
 
+type family MaybeWhenOptional r t where
+  MaybeWhenOptional Required t = t
+  MaybeWhenOptional Optional t = Maybe t
+
+-- | Lens for accessing the contents of a 'JsonField'. When the
+-- 'JsonField' is 'Optional', these contents will be wrapped in a
+-- 'Maybe'.
+jf :: forall f s opt a b. (Functor f)
+    => (MaybeWhenOptional opt a -> f (MaybeWhenOptional opt b))
+    -> JsonField '(s, opt, a) -> f (JsonField '(s, opt, b))
+jf f = \case 
+  ReqField a  -> ReqField <$> f a
+  OptField ma -> OptField <$> f (ma :: Maybe a)
+
+type family JsonFieldArg s rs where
+  JsonFieldArg s ('(s, opt, a)':rs)  = '(s, opt, a)
+  JsonFieldArg s ('(s', opt, a)':rs) = JsonFieldArg s rs
+  JsonFieldArg s '[]
+    = TL.TypeError (       TL.Text "Could not find "
+                   TL.:<>: TL.ShowType s
+                   TL.:<>: TL.Text " in json record type."
+                   )
+
+class (i ~ V.RIndex r rs) => RElem' (f :: k -> *)
+                                    (r :: k)    (r' :: k)
+                                    (rs :: [k]) (rs' :: [k])
+                                    (i :: V.Nat) | r r' rs -> rs' where
+  rlens' :: Functor g => (f r -> g (f r')) -> V.Rec f rs -> g (V.Rec f rs')
+
+instance RElem' JsonField  '(s, opt, a)         '(s, opt, b)
+                          ('(s, opt, a) ': rs) ('(s, opt, b) ': rs)
+                          V.Z where
+  rlens' :: Functor g
+         => (JsonField '(s, opt, a) -> g (JsonField '(s, opt, b)))
+         -> V.Rec JsonField ('(s, opt, a) ': rs)
+         -> g (V.Rec JsonField ('(s, opt, b) ': rs))
+  rlens' f = \case
+    jf :& xs -> (:& xs) <$> f jf
+
+instance ( V.RIndex '(s, opt, a) (no ': rs) ~ V.S i
+         , RElem' JsonField '(s, opt, a) '(s, opt, b) rs rs' i )
+         => RElem' JsonField
+                   '(s, opt, a) '(s, opt, b)
+                   (no ': rs)   (no ': rs')
+                   (V.S i) where
+  rlens' :: Functor g
+         => (JsonField '(s, opt, a) -> g (JsonField '(s, opt, b)))
+         -> V.Rec JsonField (no ': rs)
+         -> g (V.Rec JsonField (no ': rs'))
+  rlens' f = \case
+    jf :& xs -> (jf :&) <$> rlens' f xs
+
 -- | Newtype for Vinyl records with 'JsonField' types, to avoid
 -- attaching any instances directly to 'V.Rec'.
 newtype JsonRec rs = MkJsonRec { unJsonRec :: V.Rec JsonField rs }
+
+type family OptionalityOfIn s a rs where
+  OptionalityOfIn s a ('(s, opt, a) ': rs)   = opt
+  OptionalityOfIn s a ('(s', opt, a') ': rs) = OptionalityOfIn s a rs
   
+type ReplacingInJsonRec s a b opt rs rs' =
+  ( JsonFieldArg s rs ~ '(s, opt, a)
+  , RElem' JsonField '(s, opt, a) '(s, opt, b)
+                      rs           rs'
+                      (V.RIndex '(s, opt, a) rs))
+
+jr :: forall s a b opt rs rs' f.
+       (ReplacingInJsonRec s a b opt rs rs', Functor f)
+    => (JsonField '(s, opt, a) -> f (JsonField '(s, opt, b)))
+    -> JsonRec rs -> f (JsonRec rs')
+jr f = fmap MkJsonRec . rlens' f . unJsonRec
+
+type TestFields = [ "foo" ::! Int
+                  , "bar" ::? Bool
+                  ]
+
+type TestRec = JsonRec [ "foo" ::! Int
+                       , "bar" ::? Bool
+                       ]
+
+testRec :: TestRec
+testRec = MkJsonRec $ ReqField 3 :& OptField Nothing :& V.RNil
+
+(^.) :: forall s a. s -> ((a -> V.Const a a) -> s -> V.Const a s) -> a
+s ^. l = V.getConst $ l V.Const s
+
+(%~) :: forall s t a b. ((a -> V.Identity b) -> s -> V.Identity t) -> (a -> b) -> s -> t
+l %~ f = V.getIdentity . l (V.Identity . f) 
+
+l .~ a = l %~ (const a)
+
 instance (A.ToJSON a) => FieldToMaybeJson (JsonField '(s, opt, a)) where
   toMaybePair (ReqField a)      = Just (withFieldName @s a)
   toMaybePair (OptField ma)     = withFieldName @s <$> ma
