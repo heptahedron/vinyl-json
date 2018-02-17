@@ -34,6 +34,7 @@ class FieldToMaybeJson r where
 class FromJsonObj a where
   parseJsonObj :: A.Object -> A.Parser a
 
+-- | For conversion to and from `Data.Vinyl.Derived.FieldRec`.
 class IsFieldRec a rs | a -> rs where
   fromFieldRec :: FieldRec rs -> a
-  toFieldRec   :: a             -> FieldRec rs
+  toFieldRec   :: a           -> FieldRec rs

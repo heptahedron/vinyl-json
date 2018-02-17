@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -219,9 +220,7 @@ type TestFields = [ "foo" ::! Int
                   , "bar" ::? Bool
                   ]
 
-type TestRec = JsonRec [ "foo" ::! Int
-                       , "bar" ::? Bool
-                       ]
+type TestRec = JsonRec TestFields
 
 testRec :: TestRec
 testRec = MkJsonRec $ ReqField 3 :& OptField Nothing :& V.RNil
