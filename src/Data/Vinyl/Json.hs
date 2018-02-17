@@ -170,7 +170,7 @@ type family JsonFieldArg s rs where
 class (i ~ V.RIndex r rs) => RElem' (f :: k -> *)
                                     (r :: k)    (r' :: k)
                                     (rs :: [k]) (rs' :: [k])
-                                    (i :: V.Nat) | r r' rs -> rs' where
+                                    (i :: V.Nat) | r r' rs i -> rs' where
   rlens' :: Functor g => (f r -> g (f r')) -> V.Rec f rs -> g (V.Rec f rs')
 
 instance RElem' JsonField  '(s, opt, a)         '(s, opt, b)
