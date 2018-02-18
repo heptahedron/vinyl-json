@@ -43,3 +43,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - vinyl-json
+    - microlens
+    - tasty
+    - tasty-golden
+    - bytestring
