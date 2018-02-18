@@ -27,6 +27,8 @@ dependencies:
 default-extensions: # For convenience at the REPL
   - TypeApplications
   - DataKinds
+  - TypeFamilies
+  - FlexibleContexts
 
 library:
   source-dirs: src

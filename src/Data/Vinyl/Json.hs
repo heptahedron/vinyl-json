@@ -82,7 +82,6 @@ module Data.Vinyl.Json
   , Optionality (..)
   , JsonField (..)
   , JsonRec (..)
-  , MaybeWhenOptional
   , SOptionality (..)
   , SingOpt, sing
   )
@@ -106,10 +105,6 @@ import qualified GHC.TypeLits as TL
 
 import           Data.Vinyl.Json.Class
 import           Data.Vinyl.Json.Internal
-
-type family MaybeWhenOptional r t where
-  MaybeWhenOptional Required t = t
-  MaybeWhenOptional Optional t = Maybe t
 
 infixr 0 ::?
 

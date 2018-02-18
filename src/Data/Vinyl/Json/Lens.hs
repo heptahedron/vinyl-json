@@ -36,35 +36,36 @@ class HasJFLens ra rb ia ib | ra -> ia, rb -> ib where
          => (ia -> f ib)
          -> JsonField ra -> f (JsonField rb)
   
-instance ( SingOpt opt, SingOpt opt'
-         , MaybeWhenOptional opt a ~ mawo
-         , MaybeWhenOptional opt' b ~ mbwo
-         ) => HasJFLens '(s, opt, a) '(s', opt', b) mawo mbwo where
-  jfLens f = case sing @opt of
-    SRequired -> \case
-      ReqField a -> case sing @opt' of
-        SRequired -> ReqField @s' <$> f a
-        SOptional -> OptField @s' <$> f a
-    SOptional -> \case
-      OptField ma -> case sing @opt' of
-        SRequired -> ReqField @s' <$> f ma
-        SOptional -> OptField @s' <$> f ma
+instance HasJFLens '(s, Required, a) '(s', Required, b) a b where
+  jfLens f = \case 
+    ReqField a -> ReqField @s' <$> f a
 
--- TODO explicitly write out the meager 4 instances instead of using
--- singletons if performance for jfLens suffers
+instance HasJFLens '(s, Optional, a) '(s', Required, b) (Maybe a) b where
+  jfLens f = \case
+    OptField ma -> ReqField @s' <$> f ma
 
+instance HasJFLens '(s, Required, a) '(s', Optional, b) a (Maybe b) where
+  jfLens f = \case
+    ReqField a -> OptField @s' <$> f a
+
+instance HasJFLens '(s, Optional, a) '(s', Optional, b) (Maybe a) (Maybe b) where
+  jfLens f = \case
+    OptField a -> OptField @s' <$> f a
+     
 -- | 'JsonField' lens that preserves field name and optionality.
 jf :: forall a b s opt f ia ib.
       (HasJFLens '(s, opt, a) '(s, opt, b) ia ib, Functor f)
    => (ia -> f ib)
    -> JsonField '(s, opt, a) -> f (JsonField '(s, opt, b))
-jf = jfLens @('(s, opt, a)) @('(s, opt, b))
+jf = jfLens
 
-jf_ :: forall opt opt' s a b f ia ib.
-       (HasJFLens '(s, opt, a) '(s, opt', b) ia ib, Functor f)
-    => (ia -> f ib)
-    -> JsonField '(s, opt, a) -> f (JsonField '(s, opt', b))
-jf_ = jfLens
+-- | 'JsonField' lens that preserves optionality, but lets you specify
+-- a new name for the field in the first type argument.
+jfRenaming :: forall s' s a b opt f ia ib.
+              (HasJFLens '(s, opt, a) '(s', opt, b) ia ib, Functor f)
+           => (ia -> f ib)
+           -> JsonField '(s, opt, a) -> f (JsonField '(s', opt, b))
+jfRenaming = jfLens
 
 -- | Type family that finds the first instance of the symbol @s@ in
 -- the list of @(TL.Symbol, Optionality, *)@ triples and returns the
@@ -81,26 +82,57 @@ type family JsonFieldArg s rs where
                    TL.:<>: TL.Text " in json record type."
                    )
 
--- | Constraint synonym for use in the record field accessor lens,
--- which indicates the first occurrence (per 'JsonFieldArg') of @s@ in
--- the triple list @rs@, having the form @'(s, opt, a)@, will be
--- replaced by a triple of the form @'(s, opt', b)@, resulting in a
--- type-level list of triples @rs'@.
-type ReplacingInJsonRec s a b opt opt' rs rs' =
-  ( JsonFieldArg s rs ~ '(s, opt, a)
-  , RElem' '(s, opt, a) '(s, opt', b)
-                      rs           rs'
-                      (V.RIndex '(s, opt, a) rs))
-
 -- TODO use of another redudant index parameter might quell GHC's
 -- worries of UndecidableInstances in 'RElem\'', but is there a reason
 -- to avoid using that extension other than the name?
 
+-- | Generalized version of 'Data.Vinyl.Lens.RElem'. Whereas that
+-- typeclass constrains the return type of the lens to be the same as
+-- the input field type, this one allows you to change it.
+class (i ~ V.RIndex r rs) => RElem' (r :: k)    (r' :: k)
+                                    (rs :: [k]) (rs' :: [k])
+                                    (i :: V.Nat)
+                                  | r r' rs i -> rs' where
+  rlens' :: Functor g => (f r -> g (f r')) -> V.Rec f rs -> g (V.Rec f rs')
+
+instance RElem' a b (a ': rs) (b ': rs) V.Z where
+  rlens' f = \case
+    jf :& xs -> (:& xs) <$> f jf
+
+instance ( V.RIndex a (no ': rs) ~ V.S i
+         , RElem' a b rs rs' i )
+         => RElem' a b (no ': rs) (no ': rs') (V.S i) where
+  rlens' f = \case
+    jf :& xs -> (jf :&) <$> rlens' f xs
+
+-- | Constraint synonym for use in the record field accessor lens,
+-- which indicates the first occurrence (per 'JsonFieldArg') of @s@ in
+-- the triple list @rs@, having the form @'(s, opt, a)@, will be
+-- replaced by a triple of the form @'(s', opt', b)@, resulting in a
+-- type-level list of triples @rs'@.
+type ReplacingInJsonRec s s' a b opt opt' rs rs' =
+  ( JsonFieldArg s rs ~ '(s, opt, a)
+  , RElem' '(s, opt, a) '(s', opt', b)
+           rs           rs'
+           (V.RIndex '(s, opt, a) rs))
+
 -- | Lens for accessing a named field within a 'JsonRec'. Best used
 -- with @TypeApplications@, like @jRec & jr \@"some_field_name" %~
 -- (+4)@.
-jr :: forall s a b opt rs rs' f.
-       (ReplacingInJsonRec s a b opt opt rs rs', Functor f)
-    => (JsonField '(s, opt, a) -> f (JsonField '(s, opt, b)))
-    -> JsonRec rs -> f (JsonRec rs')
+jr :: forall s s' a b opt rs rs' f.
+      ( ReplacingInJsonRec s s' a b opt opt rs rs'
+      , Functor f)
+   => (JsonField '(s, opt, a) -> f (JsonField '(s', opt, b)))
+   -> JsonRec rs -> f (JsonRec rs')
 jr f = fmap MkJsonRec . rlens' f . unJsonRec
+
+-- | Convenience lens for accessing the contents of a 'JsonField'
+-- within a 'JsonRec' by name, preserving both the name and the
+-- optionality.
+jrf :: forall s a b opt ia ib rs rs' f.
+       ( ReplacingInJsonRec s s a b opt opt rs rs'
+       , HasJFLens '(s, opt, a) '(s, opt, b) ia ib
+       , Functor f)
+    => (ia -> f ib)
+    -> JsonRec rs -> f (JsonRec rs')
+jrf = jr @s @s @a @b . jf
