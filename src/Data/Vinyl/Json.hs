@@ -84,6 +84,7 @@ module Data.Vinyl.Json
   , JsonRec (..)
   , MaybeWhenOptional
   , SOptionality (..)
+  , SingOpt, sing
   )
 where
 
@@ -147,15 +148,15 @@ instance SingOpt Optional where sing = SOptional
 -- 'Optional'.
 data JsonField :: (TL.Symbol, Optionality, *) -> * where
   -- | Constructor for fields whose key must be present in the encoded JSON.
-  ReqField :: (TL.KnownSymbol s) => !a         -> JsonField '(s, Required, a)
+  ReqField :: forall s a. !a         -> JsonField '(s, Required, a)
   -- | Constructor for fields whose key may be missing from the encoded JSON.
-  OptField :: (TL.KnownSymbol s) => !(Maybe a) -> JsonField '(s, Optional, a)
+  OptField :: forall s a. !(Maybe a) -> JsonField '(s, Optional, a)
 
 -- | Newtype for Vinyl records with 'JsonField' types, to avoid
 -- attaching any instances directly to 'V.Rec'.
 newtype JsonRec rs = MkJsonRec { unJsonRec :: V.Rec JsonField rs }
 
-instance (A.ToJSON a) => FieldToMaybeJson (JsonField '(s, opt, a)) where
+instance (A.ToJSON a, TL.KnownSymbol s) => FieldToMaybeJson (JsonField '(s, opt, a)) where
   toMaybePair (ReqField a)      = Just (withFieldName @s a)
   toMaybePair (OptField ma)     = withFieldName @s <$> ma
   toMaybeEncoding (ReqField a)  = Just (withFieldName' @s a)
@@ -200,7 +201,7 @@ instance ( FromJsonObj (JsonRec rs), A.FromJSON a
 instance (FromJsonObj (JsonRec rs)) => A.FromJSON (JsonRec rs) where
   parseJSON = A.withObject "JsonRec" $ parseJsonObj
 
-instance (Show a) => Show (JsonField '(s, opt, a)) where
+instance (Show a, TL.KnownSymbol s) => Show (JsonField '(s, opt, a)) where
   show = \case
     ReqField a  -> fName <> " !-> " <> show a
     OptField ma -> fName <> " ?-> " <> case ma of
@@ -217,7 +218,7 @@ instance IsFieldRec (JsonRec '[]) '[] where
   fromFieldRec = const $ MkJsonRec V.RNil
   toFieldRec = const V.RNil . unJsonRec
 
-instance (IsFieldRec (JsonRec jrs) rs)
+instance (IsFieldRec (JsonRec jrs) rs, TL.KnownSymbol s)
          => IsFieldRec (JsonRec ('(s, Optional, t)':jrs))
                        ('(s, Maybe t)':rs) where
   fromFieldRec ((V.Field ma) :& xs)
@@ -225,7 +226,7 @@ instance (IsFieldRec (JsonRec jrs) rs)
   toFieldRec (MkJsonRec ((OptField ma) :& xs))
     = V.Field @s ma :& toFieldRec (MkJsonRec xs)
 
-instance (IsFieldRec (JsonRec jrs) rs)
+instance (IsFieldRec (JsonRec jrs) rs, TL.KnownSymbol s)
          => IsFieldRec (JsonRec ('(s, Required, t)':jrs))
                        ('(s, t)':rs) where
   fromFieldRec ((V.Field a) :& xs)

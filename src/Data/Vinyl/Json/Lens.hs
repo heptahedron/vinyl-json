@@ -31,15 +31,40 @@ import           Data.Vinyl.Json
 import           Data.Vinyl.Json.Class
 import           Data.Vinyl.Json.Internal
 
--- | Lens for accessing the contents of a 'JsonField'. When the
--- 'JsonField' is 'Optional', these contents will be wrapped in a
--- 'Maybe'.
-jf :: forall f s opt a b. (Functor f)
-   => (MaybeWhenOptional opt a -> f (MaybeWhenOptional opt b))
+class HasJFLens ra rb ia ib | ra -> ia, rb -> ib where
+  jfLens :: forall f. (Functor f)
+         => (ia -> f ib)
+         -> JsonField ra -> f (JsonField rb)
+  
+instance ( SingOpt opt, SingOpt opt'
+         , MaybeWhenOptional opt a ~ mawo
+         , MaybeWhenOptional opt' b ~ mbwo
+         ) => HasJFLens '(s, opt, a) '(s', opt', b) mawo mbwo where
+  jfLens f = case sing @opt of
+    SRequired -> \case
+      ReqField a -> case sing @opt' of
+        SRequired -> ReqField @s' <$> f a
+        SOptional -> OptField @s' <$> f a
+    SOptional -> \case
+      OptField ma -> case sing @opt' of
+        SRequired -> ReqField @s' <$> f ma
+        SOptional -> OptField @s' <$> f ma
+
+-- TODO explicitly write out the meager 4 instances instead of using
+-- singletons if performance for jfLens suffers
+
+-- | 'JsonField' lens that preserves field name and optionality.
+jf :: forall a b s opt f ia ib.
+      (HasJFLens '(s, opt, a) '(s, opt, b) ia ib, Functor f)
+   => (ia -> f ib)
    -> JsonField '(s, opt, a) -> f (JsonField '(s, opt, b))
-jf f = \case 
-  ReqField a  -> ReqField <$> f a
-  OptField ma -> OptField <$> f (ma :: Maybe a)
+jf = jfLens @('(s, opt, a)) @('(s, opt, b))
+
+jf_ :: forall opt opt' s a b f ia ib.
+       (HasJFLens '(s, opt, a) '(s, opt', b) ia ib, Functor f)
+    => (ia -> f ib)
+    -> JsonField '(s, opt, a) -> f (JsonField '(s, opt', b))
+jf_ = jfLens
 
 -- | Type family that finds the first instance of the symbol @s@ in
 -- the list of @(TL.Symbol, Optionality, *)@ triples and returns the
@@ -79,20 +104,3 @@ jr :: forall s a b opt rs rs' f.
     => (JsonField '(s, opt, a) -> f (JsonField '(s, opt, b)))
     -> JsonRec rs -> f (JsonRec rs')
 jr f = fmap MkJsonRec . rlens' f . unJsonRec
-
-{-
-toRequired :: forall s a b opt rs rs' f.
-              (ReplacingInJsonRec s a b opt Required rs rs', Functor f)
-           => (MaybeWhenOptional opt a -> f b)
-           -> JsonField '(s, opt, a) -> f (JsonField '(s, Required, b))
-toRequired f = \case
-  ReqField a  -> ReqField <$> f a
-  OptField ma -> ReqField <$> f ma
--}
--- (^.) :: forall s a. s -> ((a -> V.Const a a) -> s -> V.Const a s) -> a
--- s ^. l = V.getConst $ l V.Const s
--- 
--- (%~) :: forall s t a b. ((a -> V.Identity b) -> s -> V.Identity t) -> (a -> b) -> s -> t
--- l %~ f = V.getIdentity . l (V.Identity . f) 
--- 
--- l .~ a = l %~ (const a)
