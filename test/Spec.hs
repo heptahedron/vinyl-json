@@ -1,15 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 import           Test.Tasty
 import           Test.Tasty.Golden
+import           Test.Tasty.Hspec
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Aeson as A
 import           Lens.Micro
 
+import Data.Vinyl
 import Data.Vinyl.Json
 import Data.Vinyl.Json.Lens
 
 main :: IO ()
-main = goldenTests >>= defaultMain
+main = do
+  jsonRecTests <- sequence [goldenTests, unitTests]
+  defaultMain (testGroup "JsonRec tests" jsonRecTests)
 
 type TestFields = [ "req_int"                  ::! Int
                   , "req_just_int"             ::! Maybe Int
@@ -22,23 +26,35 @@ type TestFields = [ "req_int"                  ::! Int
                   , "opt_missing_nothing_bool" ::? Maybe Bool
                   ]
 
-testRecords :: JsonRec TestFields
-testRecords = MkJsonRec <$> 
-  [  ReqField 3
-  :& ReqField (Just 3)
-  :& ReqField Nothing
-  :& OptField (Just True)
-  :& OptField Nothing
-  :& OptField (Just (Just True))
-  :& OptField (Just Nothing)
-  :& OptField Nothing
-  :& OptField Nothing
-  :& RNil
-  ]
+testRecord :: JsonRec TestFields
+testRecord =  MkJsonRec
+           $  ReqField 3
+           :& ReqField (Just 3)
+           :& ReqField Nothing
+           :& OptField (Just True)
+           :& OptField Nothing
+           :& OptField (Just (Just True))
+           :& OptField (Just Nothing)
+           :& OptField Nothing
+           :& OptField Nothing
+           :& RNil
+
+inGoldenTestDirectory :: FilePath -> FilePath
+inGoldenTestDirectory = ("test/golden-tests/" ++)
 
 goldenTests :: IO TestTree
-goldenTests = do
-  jsonFilePaths <- findByExtension [".json"] "golden-tests"
-  fmap (testGroup "Json  conversion tests") $ forM jsonFiles $ \jsonFile ->
-    goldenVsString (takeBaseName jsonFilePath) jsonFilePath
-      $ maybe "" A.encode <$> A.decode @
+goldenTests = 
+  return $ testGroup "Encoding tests"
+    [ goldenVsString ("TestFields encoding")
+        (inGoldenTestDirectory "test-fields-encoding.json")
+        $ return $ A.encode testRecord
+    ]
+
+unitTests :: IO TestTree
+unitTests = do
+  testSpec "Decoding tests" $ describe "JSON decoding" $ do
+    it "decodes into an object identical to the one that was encoded" $ do
+      mTestRec <- A.decode @(JsonRec TestFields)
+                  <$> BL.readFile (inGoldenTestDirectory
+                                     "test-fields-encoding.json")
+      mTestRec `shouldBe` (Just testRecord)

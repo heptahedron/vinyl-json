@@ -29,6 +29,7 @@ default-extensions: # For convenience at the REPL
   - DataKinds
   - TypeFamilies
   - FlexibleContexts
+  - TypeOperators
 
 library:
   source-dirs: src
@@ -46,4 +47,5 @@ tests:
     - microlens
     - tasty
     - tasty-golden
+    - tasty-hspec
     - bytestring

@@ -1,3 +1,4 @@
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -147,10 +148,21 @@ data JsonField :: (TL.Symbol, Optionality, *) -> * where
   -- | Constructor for fields whose key may be missing from the encoded JSON.
   OptField :: forall s a. !(Maybe a) -> JsonField '(s, Optional, a)
 
+instance (Eq a) => Eq (JsonField '(s, opt, a)) where
+  (ReqField a) == (ReqField b) = a == b
+  (OptField a) == (OptField b) = a == b
+
 -- | Newtype for Vinyl records with 'JsonField' types, to avoid
 -- attaching any instances directly to 'V.Rec'.
 newtype JsonRec rs = MkJsonRec { unJsonRec :: V.Rec JsonField rs }
 
+instance Eq (JsonRec '[]) where
+  (==) = const $ const True
+
+instance (Eq (JsonField r), Eq (JsonRec rs)) => Eq (JsonRec (r ': rs)) where
+  (MkJsonRec (r :& rs)) == (MkJsonRec (r' :& rs'))
+    = r == r' && (MkJsonRec rs) == (MkJsonRec rs')
+ 
 instance (A.ToJSON a, TL.KnownSymbol s) => FieldToMaybeJson (JsonField '(s, opt, a)) where
   toMaybePair (ReqField a)      = Just (withFieldName @s a)
   toMaybePair (OptField ma)     = withFieldName @s <$> ma
