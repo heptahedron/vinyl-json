@@ -114,25 +114,25 @@ type ReplacingInJsonRec s s' a b opt opt' rs rs' =
   ( JsonFieldArg s rs ~ '(s, opt, a)
   , RElem' '(s, opt, a) '(s', opt', b)
            rs           rs'
-           (V.RIndex '(s, opt, a) rs))
+           (V.RIndex '(s, opt, a) rs) )
 
 -- | Lens for accessing a named field within a 'JsonRec'. Best used
 -- with @TypeApplications@, like @jRec & jr \@"some_field_name" %~
 -- (+4)@.
 jr :: forall s s' a b opt rs rs' f.
       ( ReplacingInJsonRec s s' a b opt opt rs rs'
-      , Functor f)
+      , Functor f )
    => (JsonField '(s, opt, a) -> f (JsonField '(s', opt, b)))
    -> JsonRec rs -> f (JsonRec rs')
 jr f = fmap MkJsonRec . rlens' f . unJsonRec
 
 -- | Convenience lens for accessing the contents of a 'JsonField'
--- within a 'JsonRec' by name, preserving both the name and the
+-- /within/ a 'JsonRec' by name, preserving both the name and the
 -- optionality.
 jrf :: forall s a b opt ia ib rs rs' f.
        ( ReplacingInJsonRec s s a b opt opt rs rs'
        , HasJFLens '(s, opt, a) '(s, opt, b) ia ib
-       , Functor f)
+       , Functor f )
     => (ia -> f ib)
     -> JsonRec rs -> f (JsonRec rs')
 jrf = jr @s @s @a @b . jf
