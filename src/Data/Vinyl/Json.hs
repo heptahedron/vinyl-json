@@ -97,6 +97,7 @@ import qualified Data.Text as T
 import           Data.Vinyl (Rec((:&)))
 import qualified Data.Vinyl as V
 import qualified Data.Vinyl.Functor as V
+import qualified Data.Vinyl.Curry as V
 import qualified Data.Vinyl.TypeLevel as V
 
 import           Data.Maybe (maybeToList)
@@ -162,6 +163,46 @@ instance Eq (JsonRec '[]) where
 instance (Eq (JsonField r), Eq (JsonRec rs)) => Eq (JsonRec (r ': rs)) where
   (MkJsonRec (r :& rs)) == (MkJsonRec (r' :& rs'))
     = r == r' && (MkJsonRec rs) == (MkJsonRec rs')
+
+class JReverseApp rs acc res | rs acc -> res where
+  jReverseApp :: JsonRec rs -> JsonRec acc -> JsonRec res
+
+instance JReverseApp '[] acc acc where
+  jReverseApp _ acc = acc
+
+instance (JReverseApp rs (r ': acc) res) => JReverseApp (r ': rs) acc res where
+  jReverseApp (MkJsonRec (x :& xs)) (MkJsonRec acc) = jReverseApp (MkJsonRec xs) (MkJsonRec (x :& acc))
+
+class JReverse rs sr | rs -> sr, sr -> rs where
+  jReverse :: JsonRec rs -> JsonRec sr
+
+instance (JReverseApp rs '[] sr, JReverseApp sr '[] rs)
+         => JReverse rs sr where
+  jReverse rs = jReverseApp rs (MkJsonRec V.RNil)
+
+class BuildJRec rs r where
+  buildJRec' :: JsonRec rs -> r
+
+instance JReverse rs sr => BuildJRec rs (JsonRec sr) where
+  buildJRec' rs = jReverse rs
+
+instance (BuildJRec ('(s, Required, a) ': rs) r)
+         => BuildJRec rs (a -> r) where
+  buildJRec' (MkJsonRec xs) = \a -> buildJRec' (MkJsonRec (ReqField @s a :& xs))
+
+instance (BuildJRec ('(s, Optional, a) ': rs) r)
+         => BuildJRec rs (Maybe a -> r) where
+  buildJRec' (MkJsonRec xs) = \a -> buildJRec' (MkJsonRec (OptField @s a :& xs))
+
+type family JsonRecCtor' rs where
+  JsonRecCtor' ('(s, Required, a) ': rs) = a       ': JsonRecCtor' rs
+  JsonRecCtor' ('(s, Optional, a) ': rs) = Maybe a ': JsonRecCtor' rs
+  JsonRecCtor' '[]                       = '[]
+
+type JsonRecCtor rs = V.Curried (JsonRecCtor' rs) (JsonRec rs)
+
+mkJRec :: forall rs. (BuildJRec '[] (JsonRecCtor rs)) => (JsonRecCtor rs)
+mkJRec = buildJRec' $ MkJsonRec V.RNil
  
 instance (A.ToJSON a, TL.KnownSymbol s) => FieldToMaybeJson (JsonField '(s, opt, a)) where
   toMaybePair (ReqField a)      = Just (withFieldName @s a)
