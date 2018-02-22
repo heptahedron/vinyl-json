@@ -22,8 +22,8 @@ import qualified Data.Vinyl.Functor as V
 import qualified GHC.TypeLits as TL
 import qualified Data.Proxy as P
 
-import Data.Vinyl.Json
-import Data.Vinyl.JsonCoRec
+import Data.Vinyl.Json.JsonRec
+import Data.Vinyl.Json.JsonCoRec
 
 class RReverseApp (rs :: [k]) (acc :: [k]) (res :: [k]) | rs acc -> res where
   rReverseApp :: V.Rec f rs -> V.Rec f acc -> V.Rec f res

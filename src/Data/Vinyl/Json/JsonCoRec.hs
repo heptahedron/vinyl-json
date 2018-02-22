@@ -24,7 +24,7 @@ Maintainer  : ~@braxton.codes
 Stability   : experimental
 
 -}
-module Data.Vinyl.JsonCoRec where
+module Data.Vinyl.Json.JsonCoRec where
 
 import           Data.Aeson ((.=), (.:), (.:!))
 import qualified Data.Aeson as A
