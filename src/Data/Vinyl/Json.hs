@@ -164,46 +164,49 @@ instance (Eq (JsonField r), Eq (JsonRec rs)) => Eq (JsonRec (r ': rs)) where
   (MkJsonRec (r :& rs)) == (MkJsonRec (r' :& rs'))
     = r == r' && (MkJsonRec rs) == (MkJsonRec rs')
 
-class JReverseApp rs acc res | rs acc -> res where
-  jReverseApp :: JsonRec rs -> JsonRec acc -> JsonRec res
+class RReverseApp rs acc res | rs acc -> res where
+  rReverseApp :: V.Rec f rs -> V.Rec f acc -> V.Rec f res
 
-instance JReverseApp '[] acc acc where
-  jReverseApp _ acc = acc
+instance RReverseApp '[] acc acc where
+  rReverseApp _ acc = acc
 
-instance (JReverseApp rs (r ': acc) res) => JReverseApp (r ': rs) acc res where
-  jReverseApp (MkJsonRec (x :& xs)) (MkJsonRec acc) = jReverseApp (MkJsonRec xs) (MkJsonRec (x :& acc))
+instance (RReverseApp rs (r ': acc) res) => RReverseApp (r ': rs) acc res where
+  rReverseApp (x :& xs) acc = rReverseApp xs (x :& acc)
 
-class JReverse rs sr | rs -> sr, sr -> rs where
-  jReverse :: JsonRec rs -> JsonRec sr
+class RReverse rs sr | rs -> sr, sr -> rs where
+  rReverse :: V.Rec f rs -> V.Rec f sr
 
-instance (JReverseApp rs '[] sr, JReverseApp sr '[] rs)
-         => JReverse rs sr where
-  jReverse rs = jReverseApp rs (MkJsonRec V.RNil)
+instance (RReverseApp rs '[] sr, RReverseApp sr '[] rs)
+         => RReverse rs sr where
+  rReverse rs = rReverseApp rs V.RNil
 
-class BuildJRec rs r where
-  buildJRec' :: JsonRec rs -> r
+class BuildJRec rs res opts where
+  buildJRec' :: JsonRec rs -> res
 
-instance JReverse rs sr => BuildJRec rs (JsonRec sr) where
-  buildJRec' rs = jReverse rs
+instance (BuildJRec ('(s, Required, a) ': rs) res opts)
+         => BuildJRec rs (a -> res) (Required ': opts) where
+  buildJRec' (MkJsonRec rs) = \a -> buildJRec' @_ @res @opts (MkJsonRec $ ReqField @s a :& rs)
 
-instance (BuildJRec ('(s, Required, a) ': rs) r)
-         => BuildJRec rs (a -> r) where
-  buildJRec' (MkJsonRec xs) = \a -> buildJRec' (MkJsonRec (ReqField @s a :& xs))
+instance (BuildJRec ('(s, Optional, a) ': rs) res opts)
+         => BuildJRec rs (Maybe a -> res) (Optional ': opts) where
+  buildJRec' (MkJsonRec rs) = \a -> buildJRec' @_ @res @opts (MkJsonRec $ OptField @s a :& rs)
 
-instance (BuildJRec ('(s, Optional, a) ': rs) r)
-         => BuildJRec rs (Maybe a -> r) where
-  buildJRec' (MkJsonRec xs) = \a -> buildJRec' (MkJsonRec (OptField @s a :& xs))
+instance (RReverse rs sr) => BuildJRec rs (JsonRec sr) opts where
+  buildJRec' (MkJsonRec rs) = MkJsonRec $ rReverse rs
 
-type family JsonRecCtor' rs where
-  JsonRecCtor' ('(s, Required, a) ': rs) = a       ': JsonRecCtor' rs
-  JsonRecCtor' ('(s, Optional, a) ': rs) = Maybe a ': JsonRecCtor' rs
-  JsonRecCtor' '[]                       = '[]
+type family CurriedJ rs res where
+  CurriedJ ('(s, Required, a) ': rs) res = a       -> CurriedJ rs res
+  CurriedJ ('(s, Optional, a) ': rs) res = Maybe a -> CurriedJ rs res
+  CurriedJ '[]                       res = res
 
-type JsonRecCtor rs = V.Curried (JsonRecCtor' rs) (JsonRec rs)
+type family OptList rs where
+  OptList ('(s, opt, a) ': rs) = opt ': OptList rs
+  OptList '[]                  = '[]
 
-mkJRec :: forall rs. (BuildJRec '[] (JsonRecCtor rs)) => (JsonRecCtor rs)
-mkJRec = buildJRec' $ MkJsonRec V.RNil
- 
+mkJRec :: forall rs. (BuildJRec '[] (CurriedJ rs (JsonRec rs)) (OptList rs))
+       => CurriedJ rs (JsonRec rs)
+mkJRec = buildJRec' @_ @_ @(OptList rs) $ MkJsonRec V.RNil
+
 instance (A.ToJSON a, TL.KnownSymbol s) => FieldToMaybeJson (JsonField '(s, opt, a)) where
   toMaybePair (ReqField a)      = Just (withFieldName @s a)
   toMaybePair (OptField ma)     = withFieldName @s <$> ma
