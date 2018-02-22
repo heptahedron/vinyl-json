@@ -83,8 +83,6 @@ module Data.Vinyl.Json
   , Optionality (..)
   , JsonField (..)
   , JsonRec (..)
-  , SOptionality (..)
-  , SingOpt, sing
   )
 where
 
@@ -121,20 +119,6 @@ type (::!) s t = '(s, Required, t)
 
 -- | Whether a field is required or optional.
 data Optionality = Required | Optional
-
--- | Singleton for the 'Optionality' type, not intended for external
--- use.
-data SOptionality opt where
-  SRequired :: SOptionality Required
-  SOptional :: SOptionality Optional
-
--- | One-off singleton class to get 'SOptionality' values, not
--- intended for external user.
-class SingOpt opt where
-  sing :: SOptionality opt
-
-instance SingOpt Required where sing = SRequired
-instance SingOpt Optional where sing = SOptional
 
 -- | Corresponds to a key-value pair in JSON-encoded data. @JsonField
 -- '(s, opt, a)@ is the field with key @s@, having 'Optionality'
@@ -219,17 +203,22 @@ instance FromJsonObj (JsonRec '[]) where
   parseJsonObj = const $ return $ MkJsonRec V.RNil
 
 instance ( FromJsonObj (JsonRec rs), A.FromJSON a
-         , TL.KnownSymbol s, SingOpt opt)
-  => FromJsonObj (JsonRec ('(s, opt, a)':rs)) where
-  parseJsonObj o = case sing @opt of
-    SRequired -> do
-      a <- o .: fName
-      rs <- unJsonRec <$> parseJsonObj @(JsonRec rs) o
-      return $ MkJsonRec $ (ReqField @s a) :& rs
-    SOptional -> do
-      ma <- o .:! fName
-      rs <- unJsonRec <$> parseJsonObj @(JsonRec rs) o
-      return $ MkJsonRec $ (OptField @s ma) :& rs
+         , TL.KnownSymbol s )
+  => FromJsonObj (JsonRec ('(s, Required, a)':rs)) where
+  parseJsonObj o = do
+    a <- o .: fName
+    rs <- unJsonRec <$> parseJsonObj @(JsonRec rs) o
+    return $ MkJsonRec $ (ReqField @s a) :& rs
+    where
+      fName = T.pack $ TL.symbolVal $ P.Proxy @s
+
+instance ( FromJsonObj (JsonRec rs), A.FromJSON a
+         , TL.KnownSymbol s )
+  => FromJsonObj (JsonRec ('(s, Optional, a)':rs)) where
+  parseJsonObj o = do
+    ma <- o .:! fName
+    rs <- unJsonRec <$> parseJsonObj @(JsonRec rs) o
+    return $ MkJsonRec $ (OptField @s ma) :& rs
     where
       fName = T.pack $ TL.symbolVal $ P.Proxy @s
 
