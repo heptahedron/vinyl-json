@@ -73,15 +73,6 @@ instance (V.AllAllSat '[A.FromJSON, IsIn rs] rs, V.RecApplicative rs)
                => A.Value -> V.Const (A.Parser (JsonCoRec rs)) r
         parser = V.Const . fmap mkJCoRec . A.parseJSON @r
 
-instance (RReverse rs sr) => BuildMatcher a rs (JsonCoRec sr -> a)  where
-  buildMatcher' rs = flip V.match (rReverse rs) . unJsonCoRec
-
 mkJCoRec :: forall rs r. (V.RElem r rs (V.RIndex r rs)) => r -> JsonCoRec rs
 mkJCoRec = MkJsonCoRec . V.CoRec . V.Identity
-
-matchJ :: forall rs a.
-          (BuildMatcher a '[] (V.Curried (Handlers' rs a)
-                                         (JsonCoRec rs -> a)))
-       => V.Curried (Handlers' rs a) (JsonCoRec rs -> a)
-matchJ = buildMatcher' @a V.RNil
             

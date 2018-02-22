@@ -148,33 +148,6 @@ instance (Eq (JsonField r), Eq (JsonRec rs)) => Eq (JsonRec (r ': rs)) where
   (MkJsonRec (r :& rs)) == (MkJsonRec (r' :& rs'))
     = r == r' && (MkJsonRec rs) == (MkJsonRec rs')
 
-class BuildJRec rs res opts where
-  mkJRec' :: JsonRec rs -> res
-
-instance (BuildJRec ('(s, Required, a) ': rs) res opts)
-         => BuildJRec rs (a -> res) (Required ': opts) where
-  mkJRec' (MkJsonRec rs) = \a -> mkJRec' @_ @res @opts (MkJsonRec $ ReqField @s a :& rs)
-
-instance (BuildJRec ('(s, Optional, a) ': rs) res opts)
-         => BuildJRec rs (Maybe a -> res) (Optional ': opts) where
-  mkJRec' (MkJsonRec rs) = \a -> mkJRec' @_ @res @opts (MkJsonRec $ OptField @s a :& rs)
-
-instance (RReverse rs sr) => BuildJRec rs (JsonRec sr) opts where
-  mkJRec' (MkJsonRec rs) = MkJsonRec $ rReverse rs
-
-type family CurriedJ rs res where
-  CurriedJ ('(s, Required, a) ': rs) res = a       -> CurriedJ rs res
-  CurriedJ ('(s, Optional, a) ': rs) res = Maybe a -> CurriedJ rs res
-  CurriedJ '[]                       res = res
-
-type family OptList rs where
-  OptList ('(s, opt, a) ': rs) = opt ': OptList rs
-  OptList '[]                  = '[]
-
-mkJRec :: forall rs. (BuildJRec '[] (CurriedJ rs (JsonRec rs)) (OptList rs))
-       => CurriedJ rs (JsonRec rs)
-mkJRec = mkJRec' @_ @_ @(OptList rs) $ MkJsonRec V.RNil
-
 instance (A.ToJSON a, TL.KnownSymbol s) => FieldToMaybeJson (JsonField '(s, opt, a)) where
   toMaybePair (ReqField a)      = Just (withFieldName @s a)
   toMaybePair (OptField ma)     = withFieldName @s <$> ma
