@@ -1,16 +1,10 @@
-{-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeOperators #-}
@@ -22,7 +16,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 {- |
-Module      : Data.Vinyl.JsonCoRec
+Module      : Data.Vinyl.Json.JsonCoRec
 Description : 'JsonCoRec' record type, for JSON serialization of sums of types.
 Copyright   : (c) Braxton Spence, 2018
 License     : MIT
@@ -48,8 +42,6 @@ import qualified Data.Vinyl.TypeLevel as V
 import qualified Data.Proxy as P
 import           Control.Applicative ((<|>))
 
-import           Data.Vinyl.Json
-import           Data.Vinyl.Json.Class
 import           Data.Vinyl.Json.Internal
 
 newtype JsonCoRec rs = MkJsonCoRec { unJsonCoRec :: V.CoRec V.Identity rs }

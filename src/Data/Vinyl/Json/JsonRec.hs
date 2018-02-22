@@ -20,7 +20,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 {- |
-Module      : Data.Vinyl.Json
+Module      : Data.Vinyl.Json.JsonRec
 Description : 'JsonRec' record type, for JSON serialization,
               where keys may be omitted.
 Copyright   : (c) Braxton Spence, 2018
@@ -78,7 +78,7 @@ fields with @present@ in their name, whose values were @Just
 something@, are present in the output.
 
 -}
-module Data.Vinyl.Json
+module Data.Vinyl.Json.JsonRec
   ( (::?), (::!)
   , Optionality (..)
   , JsonField (..)
@@ -103,7 +103,6 @@ import qualified Data.Proxy as P
 import           Data.Semigroup ((<>))
 import qualified GHC.TypeLits as TL
 
-import           Data.Vinyl.Json.Class
 import           Data.Vinyl.Json.Internal
 
 infixr 0 ::?

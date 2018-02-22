@@ -27,8 +27,7 @@ import qualified Data.Vinyl.TypeLevel as V
 
 import qualified GHC.TypeLits as TL
 
-import           Data.Vinyl.Json
-import           Data.Vinyl.Json.Class
+import           Data.Vinyl.Json.JsonRec
 import           Data.Vinyl.Json.Internal
 
 class HasJFLens ra rb ia ib | ra -> ia, rb -> ib where

@@ -45,7 +45,6 @@ import qualified Data.Proxy as P
 import qualified GHC.TypeLits as TL
 import           Data.Semigroup ((<>))
 
-import           Data.Vinyl.Json.Class
 import           Data.Vinyl.Json.Internal
 
 -- | \"Simple\" JSON field type. Unlike 'Data.Vinyl.Json.JsonField', all
