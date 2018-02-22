@@ -22,62 +22,12 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 {- |
-Module      : Data.Vinyl.Json
-Description : 'JsonRec' record type, for JSON serialization,
-              where keys may be omitted.
+Module      : Data.Vinyl.JsonCoRec
+Description : 'JsonCoRec' record type, for JSON serialization of sums of types.
 Copyright   : (c) Braxton Spence, 2018
 License     : MIT
 Maintainer  : ~@braxton.codes
 Stability   : experimental
-
-The following example should illustrate the behavior of 'ReqField's,
-'OptField's, and their respective behavior during serialization.
-
-> import Data.Vinyl
-> import Data.Vinyl.Json
-> import Data.ByteString.Lazy as B
->
-> type TestFields = [ "req_int"                  ::! Int
->                   , "req_just_int"             ::! Maybe Int
->                   , "req_nothing_int"          ::! Maybe Int
->                   , "opt_present_bool"         ::? Bool
->                   , "opt_missing_bool"         ::? Bool
->                   , "opt_present_just_bool"    ::? Maybe Bool
->                   , "opt_present_nothing_bool" ::? Maybe Bool
->                   , "opt_missing_just_bool"    ::? Maybe Bool
->                   , "opt_missing_nothing_bool" ::? Maybe Bool
->                   ]
-> 
-> testRec :: JsonRec TestFields
-> testRec = MkJsonRec
->         $  ReqField 3
->         :& ReqField (Just 3)
->         :& ReqField Nothing
->         :& OptField (Just True)
->         :& OptField Nothing
->         :& OptField (Just (Just True))
->         :& OptField (Just Nothing)
->         :& OptField Nothing
->         :& OptField Nothing
->         :& RNil
-> 
-> printTestRecEnc :: IO ()
-> printTestRecEnc = B.putStrLn $ A.encode testRec
-
-Here, @printTestRecEnc@ should print something like
-
-> { "req_int":3
-> , "req_just_int":3
-> , "req_nothing_int":null
-> , "opt_present_bool":true
-> , "opt_present_just_bool":true
-> , "opt_present_nothing_bool":null
-> }
-
-Notice how all the fields with @missing@ in their name, whose values
-were @Nothing@, are in fact missing from the output, and how the
-fields with @present@ in their name, whose values were @Just
-something@, are present in the output.
 
 -}
 module Data.Vinyl.JsonCoRec where
@@ -91,6 +41,7 @@ import qualified Data.Text as T
 import           Data.Vinyl (Rec((:&)))
 import qualified Data.Vinyl as V
 import qualified Data.Vinyl.CoRec as V
+import qualified Data.Vinyl.Curry as V
 import qualified Data.Vinyl.Functor as V
 import qualified Data.Vinyl.TypeLevel as V
 
@@ -120,5 +71,17 @@ instance (V.AllAllSat '[A.FromJSON, IsIn rs] rs, V.RecApplicative rs)
       where
         parser :: forall r rs b. (IsIn rs r, A.FromJSON r)
                => A.Value -> V.Const (A.Parser (JsonCoRec rs)) r
-        parser = V.Const . fmap MkJsonCoRec . fmap V.CoRec . fmap V.Identity . A.parseJSON @r
+        parser = V.Const . fmap mkJCoRec . A.parseJSON @r
 
+instance (RReverse rs sr) => BuildMatcher a rs (JsonCoRec sr -> a)  where
+  buildMatcher' rs = flip V.match (rReverse rs) . unJsonCoRec
+
+mkJCoRec :: forall rs r. (V.RElem r rs (V.RIndex r rs)) => r -> JsonCoRec rs
+mkJCoRec = MkJsonCoRec . V.CoRec . V.Identity
+
+matchJ :: forall rs a.
+          (BuildMatcher a '[] (V.Curried (Handlers' rs a)
+                                         (JsonCoRec rs -> a)))
+       => V.Curried (Handlers' rs a) (JsonCoRec rs -> a)
+matchJ = buildMatcher' @a V.RNil
+            

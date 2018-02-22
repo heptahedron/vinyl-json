@@ -164,35 +164,19 @@ instance (Eq (JsonField r), Eq (JsonRec rs)) => Eq (JsonRec (r ': rs)) where
   (MkJsonRec (r :& rs)) == (MkJsonRec (r' :& rs'))
     = r == r' && (MkJsonRec rs) == (MkJsonRec rs')
 
-class RReverseApp rs acc res | rs acc -> res where
-  rReverseApp :: V.Rec f rs -> V.Rec f acc -> V.Rec f res
-
-instance RReverseApp '[] acc acc where
-  rReverseApp _ acc = acc
-
-instance (RReverseApp rs (r ': acc) res) => RReverseApp (r ': rs) acc res where
-  rReverseApp (x :& xs) acc = rReverseApp xs (x :& acc)
-
-class RReverse rs sr | rs -> sr, sr -> rs where
-  rReverse :: V.Rec f rs -> V.Rec f sr
-
-instance (RReverseApp rs '[] sr, RReverseApp sr '[] rs)
-         => RReverse rs sr where
-  rReverse rs = rReverseApp rs V.RNil
-
 class BuildJRec rs res opts where
-  buildJRec' :: JsonRec rs -> res
+  mkJRec' :: JsonRec rs -> res
 
 instance (BuildJRec ('(s, Required, a) ': rs) res opts)
          => BuildJRec rs (a -> res) (Required ': opts) where
-  buildJRec' (MkJsonRec rs) = \a -> buildJRec' @_ @res @opts (MkJsonRec $ ReqField @s a :& rs)
+  mkJRec' (MkJsonRec rs) = \a -> mkJRec' @_ @res @opts (MkJsonRec $ ReqField @s a :& rs)
 
 instance (BuildJRec ('(s, Optional, a) ': rs) res opts)
          => BuildJRec rs (Maybe a -> res) (Optional ': opts) where
-  buildJRec' (MkJsonRec rs) = \a -> buildJRec' @_ @res @opts (MkJsonRec $ OptField @s a :& rs)
+  mkJRec' (MkJsonRec rs) = \a -> mkJRec' @_ @res @opts (MkJsonRec $ OptField @s a :& rs)
 
 instance (RReverse rs sr) => BuildJRec rs (JsonRec sr) opts where
-  buildJRec' (MkJsonRec rs) = MkJsonRec $ rReverse rs
+  mkJRec' (MkJsonRec rs) = MkJsonRec $ rReverse rs
 
 type family CurriedJ rs res where
   CurriedJ ('(s, Required, a) ': rs) res = a       -> CurriedJ rs res
@@ -205,7 +189,7 @@ type family OptList rs where
 
 mkJRec :: forall rs. (BuildJRec '[] (CurriedJ rs (JsonRec rs)) (OptList rs))
        => CurriedJ rs (JsonRec rs)
-mkJRec = buildJRec' @_ @_ @(OptList rs) $ MkJsonRec V.RNil
+mkJRec = mkJRec' @_ @_ @(OptList rs) $ MkJsonRec V.RNil
 
 instance (A.ToJSON a, TL.KnownSymbol s) => FieldToMaybeJson (JsonField '(s, opt, a)) where
   toMaybePair (ReqField a)      = Just (withFieldName @s a)
@@ -217,8 +201,8 @@ instance (V.RecAll JsonField rs FieldToMaybeJson) => A.ToJSON (JsonRec rs) where
   toJSON = A.object
          . concat
          . V.recordToList
-         . V.rmap (  withDict (V.Const . maybeToList . toMaybePair)
-                   . V.getCompose)
+         . V.rmap ( withDict (V.Const . maybeToList . toMaybePair)
+                  . V.getCompose )
          . V.reifyConstraint (P.Proxy @FieldToMaybeJson)
          . unJsonRec
 
@@ -226,8 +210,8 @@ instance (V.RecAll JsonField rs FieldToMaybeJson) => A.ToJSON (JsonRec rs) where
              . foldr (<>) mempty
              . concat
              . V.recordToList
-             . V.rmap (  withDict (V.Const . maybeToList . toMaybeEncoding)
-                       . V.getCompose)
+             . V.rmap ( withDict (V.Const . maybeToList . toMaybeEncoding)
+                      . V.getCompose )
              . V.reifyConstraint (P.Proxy @FieldToMaybeJson)
              . unJsonRec
 
