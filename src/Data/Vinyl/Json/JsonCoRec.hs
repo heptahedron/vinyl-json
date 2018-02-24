@@ -51,6 +51,10 @@ instance (V.AllAllSat '[A.ToJSON] rs, V.RecApplicative rs)
   toJSON     = V.onField (P.Proxy @('[A.ToJSON])) A.toJSON     . unJsonCoRec
   toEncoding = V.onField (P.Proxy @('[A.ToJSON])) A.toEncoding . unJsonCoRec
 
+instance (V.AllAllSat '[Show] rs, V.RecApplicative rs)
+         => Show (JsonCoRec rs) where
+  show = V.onField (P.Proxy @('[Show])) show . unJsonCoRec
+
 class (V.RElem r rs (V.RIndex r rs)) => IsIn rs r
 instance (V.RElem r rs (V.RIndex r rs)) => IsIn rs r
 

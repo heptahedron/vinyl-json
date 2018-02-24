@@ -51,6 +51,18 @@ instance (BuildRec f (r ': rs) res)
          => BuildRec f rs (f r -> res) where
   buildRec' rs = \fa -> buildRec' (fa :& rs)
 
+class DestructureRec (f :: k -> *) (rs :: [k]) where
+  destructWith' :: (V.CurriedF f rs res) -> V.Rec f rs -> res
+
+instance DestructureRec f '[] where
+  destructWith' = ($) . const
+
+instance (DestructureRec f rs) => DestructureRec f (r ': rs) where
+  destructWith' d (x :& xs) = dWith (d x) xs
+    where
+      dWith :: V.CurriedF f rs res -> V.Rec f rs -> res
+      dWith = destructWith'
+
 class BuildMatcher a rs res where
   buildMatcher' :: V.Rec (V.Handler a) rs -> res
 
